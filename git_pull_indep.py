@@ -250,6 +250,13 @@ class GitPullIndep:
             self.logger.info("All operations completed successfully")
             self.logger.info("=" * 60)
             
+            # If initiator is provided, execute it using os.execl
+            if self.initiator:
+                self.logger.info(f"Executing initiator: {self.initiator}")
+                # Use os.execl to replace current process with the initiator
+                os.execl(sys.executable, sys.executable, str(self.initiator))
+                # Code after os.execl will not be reached
+            
         except Exception as e:
             error_msg = f"Error: {str(e)}"
             self.logger.error(error_msg)
@@ -257,10 +264,11 @@ class GitPullIndep:
             raise
         
         finally:
-            # Return to initiator directory if provided, otherwise original directory
-            target_dir = self.initiator if self.initiator else self.original_dir
-            os.chdir(target_dir)
-            self.logger.info(f"Returned to directory: {target_dir}")
+            # Only change directory if we're not executing initiator
+            # (if initiator is set, we won't reach here because of os.execl)
+            if not self.initiator:
+                os.chdir(self.original_dir)
+                self.logger.info(f"Returned to original directory: {self.original_dir}")
 
 
 def main():
@@ -273,7 +281,7 @@ Examples:
   %(prog)s /path/to/repo
   %(prog)s /path/to/repo --checkout main
   %(prog)s /path/to/repo --checkout feature-branch --cache_path /tmp/cache
-  %(prog)s /path/to/repo --initiator /path/to/caller/dir
+  %(prog)s /path/to/repo --initiator /path/to/caller_script.py
         """
     )
     
@@ -295,7 +303,7 @@ Examples:
     
     parser.add_argument(
         '--initiator',
-        help='Path to the initiator directory to return to after execution'
+        help='Path to the Python script to execute after completion (using os.execl)'
     )
     
     parser.add_argument(

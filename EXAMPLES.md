@@ -54,19 +54,25 @@ The script will:
 
 **Note**: The script uses `os.execl` instead of `subprocess` because the project might be updated during execution.
 
-## Example 4: With Initiator Directory
+## Example 4: With Initiator Script
 
 ```bash
-$ python git_pull_indep.py /path/to/repo --initiator /path/to/caller/dir
+$ python git_pull_indep.py /path/to/repo --initiator /path/to/caller_script.py
 ```
 
 The script will:
 1. Perform all git operations
-2. Return to `/path/to/caller/dir` instead of the original working directory
+2. Use `os.execl` to execute `/path/to/caller_script.py`, replacing the current process
 
 This is useful when:
-- The calling script is in a different repository
-- You want to ensure the script returns to a specific directory regardless of where it was called from
+- Your application needs to restart itself after a git update
+- The calling script should be executed with the updated code
+
+**Example workflow**:
+1. Your application detects it needs an update
+2. It calls `git_pull_indep.py` with `--initiator __file__` (pointing to itself)
+3. Git operations complete successfully
+4. Your application is executed again via `os.execl`, now running the updated code
 
 ## Example 5: All Options
 
@@ -74,7 +80,7 @@ This is useful when:
 $ python git_pull_indep.py /path/to/repo \
     --checkout main \
     --cache_path /tmp/cache \
-    --initiator /path/to/caller \
+    --initiator /path/to/caller_script.py \
     --log-level DEBUG
 ```
 
@@ -100,12 +106,11 @@ if status_file.exists():
 
 ## Calling from Another Python Script
 
-### Simple Approach (Using os.system)
+### Self-Updating Application
 
 ```python
 import sys
 import os
-from pathlib import Path
 
 # Get the current Python interpreter (works in venv)
 python_exe = sys.executable
@@ -116,22 +121,21 @@ script_path = "/path/to/git_pull_indep.py"
 # Repository to update
 repo_path = "/path/to/repo"
 
-# Current directory to return to
-initiator_dir = os.getcwd()
+# This script itself - will be executed after update via os.execl
+this_script = __file__
 
-# Execute the script
+# Execute the update script
 result = os.system(
     f"{python_exe} {script_path} {repo_path} "
-    f"--checkout main --initiator {initiator_dir}"
+    f"--checkout main --initiator {this_script}"
 )
 
-if result == 0:
-    print("Update successful!")
-else:
+# This line won't be reached if update succeeds and initiator is executed
+if result != 0:
     print("Update failed!")
 ```
 
-### Advanced Approach (For scenarios where script might be updated)
+### Advanced Approach (For scenarios where git_pull_indep is in repo being updated)
 
 ```python
 import sys
@@ -149,20 +153,16 @@ repo_path = "/path/to/repo"
 # Cache path to avoid conflicts
 cache_path = "/tmp/git_pull_cache"
 
-# Current directory to return to
-initiator_dir = os.getcwd()
+# This script - will be executed after update
+this_script = __file__
 
 # Execute with cache_path to prevent issues if script is part of repo being updated
 result = os.system(
     f"{python_exe} {script_path} {repo_path} "
-    f"--cache_path {cache_path} --initiator {initiator_dir}"
+    f"--cache_path {cache_path} --initiator {this_script}"
 )
 
-if result == 0:
-    # Check status file for detailed info
-    status_file = Path(repo_path) / ".git_pull_indep_status"
-    if status_file.exists():
-        print(status_file.read_text())
-else:
+# This line won't be reached if update succeeds and initiator is executed
+if result != 0:
     print("Update failed!")
 ```

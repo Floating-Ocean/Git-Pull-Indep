@@ -8,7 +8,7 @@ A tool to perform git pull independently. This Python script can be called from 
 - Update submodules recursively with `git submodule update --init --recursive`
 - Optional branch checkout before pulling (creates branch if it doesn't exist)
 - Cache path option to copy the project before execution (useful when used as a submodule)
-- Initiator option to specify the directory to return to after execution
+- Initiator option to execute a Python script after completion using `os.execl` (useful for restarting the calling script after update)
 - Uses `os.execl` for cache execution to replace the process (important when the project itself is being updated)
 - Uses `sys.executable` for Python execution (venv compatible)
 - Creates status marker file for success/failure tracking
@@ -54,15 +54,20 @@ This is useful when the script is used as a submodule. The script will:
 ### With Initiator
 
 ```bash
-python git_pull_indep.py /path/to/repo --initiator /path/to/caller/dir
+python git_pull_indep.py /path/to/repo --initiator /path/to/caller_script.py
 ```
 
-The `--initiator` option specifies which directory to return to after execution completes. This is useful when the calling script is in a different repository or directory than the current working directory.
+The `--initiator` option specifies a Python script to execute after the git operations complete successfully. The script uses `os.execl` to replace the current process with the initiator script.
+
+**Use case**: When your application needs to update itself via git, you can use this option to restart your application after the update:
+1. Your application calls `git_pull_indep.py` with `--initiator` pointing to your application's main script
+2. Git operations complete successfully
+3. The script executes your application using `os.execl`, effectively restarting it with the updated code
 
 ### All Options
 
 ```bash
-python git_pull_indep.py /path/to/repo --checkout main --cache_path /tmp/cache --initiator /path/to/caller --log-level DEBUG
+python git_pull_indep.py /path/to/repo --checkout main --cache_path /tmp/cache --initiator /path/to/caller_script.py --log-level DEBUG
 ```
 
 ## Options
@@ -70,7 +75,7 @@ python git_pull_indep.py /path/to/repo --checkout main --cache_path /tmp/cache -
 - `repo_path` (required): Path to the git repository
 - `--checkout BRANCH`: Branch to checkout before pulling
 - `--cache_path PATH`: Path to copy the project before execution (uses `os.execl` to replace process)
-- `--initiator PATH`: Directory to return to after execution
+- `--initiator PATH`: Python script to execute after completion using `os.execl` (for restarting applications)
 - `--log-level LEVEL`: Logging level (DEBUG, INFO, WARNING, ERROR). Default: INFO
 
 ## Status Tracking
@@ -91,12 +96,11 @@ Message: All operations completed successfully
 
 When this tool is used as a submodule in a repository that needs to update itself:
 
-1. The calling script invokes this script with `--cache_path` and optionally `--initiator`
+1. The calling script invokes this script with `--cache_path` and `--initiator`
 2. The script copies itself to the cache location
 3. Uses `os.execl` to replace the current process and execute from cache (this prevents issues when the project files are updated)
 4. Updates the parent repository
-5. Returns to the initiator directory (if specified) or the original directory
-6. After restart, the calling script can check the status file to confirm success
+5. Uses `os.execl` to execute the initiator script, effectively restarting the calling application with updated code
 
 Example from a calling script:
 ```python
@@ -104,15 +108,33 @@ import sys
 import os
 
 # Get paths
-current_dir = os.getcwd()
 repo_path = "/path/to/repo"
 script_path = "/path/to/git_pull_indep.py"
+this_script = __file__  # The calling script itself
 
-# Execute with os.system or subprocess
-os.system(f"{sys.executable} {script_path} {repo_path} --cache_path /tmp/cache --initiator {current_dir}")
+# Execute with os.system
+# After git operations complete, this script will be executed again via os.execl
+os.system(f"{sys.executable} {script_path} {repo_path} --cache_path /tmp/cache --initiator {this_script}")
 
-# After the script completes, check status
-# Note: If the calling script itself is restarted, it should check the status file
+# This line won't be reached if the update succeeds and initiator is executed
+```
+
+At the beginning of your application, check the status file:
+```python
+from pathlib import Path
+
+repo_path = Path("/path/to/repo")
+status_file = repo_path / ".git_pull_indep_status"
+
+if status_file.exists():
+    content = status_file.read_text()
+    if "Status: SUCCESS" in content:
+        print("Repository was updated successfully!")
+        # Continue with updated code
+    else:
+        print("Repository update failed!")
+        # Handle error
+```
 ```
 
 ## Requirements
