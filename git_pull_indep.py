@@ -35,6 +35,7 @@ class GitPullIndep:
         self.original_dir = Path.cwd()
         self.status_file = self.repo_path / ".git_pull_indep_status"
         self.log_file = self.repo_path / ".git_pull_indep.log"
+        self.repo_changed = False  # Track if repo had changes
         
         # Setup logging
         self._setup_logging(log_level)
@@ -58,13 +59,15 @@ class GitPullIndep:
         """Write status to status file"""
         status = "SUCCESS" if success else "FAILURE"
         timestamp = datetime.now().isoformat()
+        changed = "Yes" if self.repo_changed else "No"
         
         with open(self.status_file, 'w') as f:
             f.write(f"Status: {status}\n")
             f.write(f"Timestamp: {timestamp}\n")
+            f.write(f"Repository Changed: {changed}\n")
             f.write(f"Message: {message}\n")
         
-        self.logger.info(f"Status written: {status} - {message}")
+        self.logger.info(f"Status written: {status} - Changed: {changed} - {message}")
         
     def _copy_to_cache(self):
         """Copy the project to cache path and return the new script path"""
@@ -160,8 +163,15 @@ class GitPullIndep:
             
             for info in pull_info:
                 self.logger.info(f"Pulled: {info.ref} - {info.flags}")
+                # Check if HEAD_UPTODATE flag (4) is not set, meaning changes were pulled
+                # HEAD_UPTODATE = 4 means no changes
+                if info.flags != 4:
+                    self.repo_changed = True
             
-            self.logger.info("Git pull completed successfully")
+            if self.repo_changed:
+                self.logger.info("Git pull completed successfully - Repository was updated")
+            else:
+                self.logger.info("Git pull completed successfully - Repository already up-to-date")
             
         except Exception as e:
             self.logger.error(f"Failed to perform git pull: {e}")
@@ -247,7 +257,10 @@ class GitPullIndep:
             # Write success status
             self._write_status(True, "All operations completed successfully")
             
-            self.logger.info("All operations completed successfully")
+            if self.repo_changed:
+                self.logger.info("All operations completed successfully - Repository was updated with new changes")
+            else:
+                self.logger.info("All operations completed successfully - Repository was already up-to-date")
             self.logger.info("=" * 60)
             
             # If initiator is provided, execute it using os.execl

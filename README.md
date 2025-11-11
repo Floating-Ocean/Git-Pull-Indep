@@ -82,15 +82,20 @@ python git_pull_indep.py /path/to/repo --checkout main --cache_path /tmp/cache -
 
 After execution, the script creates two files in the repository:
 
-1. `.git_pull_indep_status`: Contains execution status (SUCCESS/FAILURE), timestamp, and message
+1. `.git_pull_indep_status`: Contains execution status (SUCCESS/FAILURE), timestamp, repository change indicator, and message
 2. `.git_pull_indep.log`: Complete execution log
 
 Example status file:
 ```
 Status: SUCCESS
-Timestamp: 2025-11-11T07:28:48.964700
+Timestamp: 2025-11-11T14:40:29.224474
+Repository Changed: Yes
 Message: All operations completed successfully
 ```
+
+The "Repository Changed" field indicates whether the git pull operation retrieved any new changes:
+- `Yes`: New commits were pulled from the remote
+- `No`: Repository was already up-to-date or no remote configured
 
 ## Use Case: As a Submodule
 

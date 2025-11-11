@@ -22,9 +22,12 @@ Output:
 Status file (`.git_pull_indep_status`):
 ```
 Status: SUCCESS
-Timestamp: 2025-11-11T07:33:46.675123
+Timestamp: 2025-11-11T14:40:29.224474
+Repository Changed: Yes
 Message: All operations completed successfully
 ```
+
+The "Repository Changed" field indicates whether new commits were pulled.
 
 ## Example 2: With Branch Checkout
 
@@ -97,11 +100,20 @@ if status_file.exists():
     content = status_file.read_text()
     if "Status: SUCCESS" in content:
         print("Git pull succeeded!")
+        
+        # Check if repository had changes
+        if "Repository Changed: Yes" in content:
+            print("Repository was updated with new changes!")
+            # Application may need to reload or restart
+        else:
+            print("Repository was already up-to-date.")
+        
         # Continue with your application
     else:
         print("Git pull failed!")
         # Handle failure
         sys.exit(1)
+```
 ```
 
 ## Calling from Another Python Script
