@@ -48,16 +48,33 @@ $ python git_pull_indep.py /path/to/repo --cache_path /tmp/cache
 
 The script will:
 1. Copy itself to `/tmp/cache/Git-Pull-Indep/`
-2. Execute from the cache location
+2. Use `os.execl` to replace the current process and execute from the cache location
 3. Perform all git operations on the target repo
 4. This prevents conflicts when the script itself is part of the repo being updated
 
-## Example 4: All Options
+**Note**: The script uses `os.execl` instead of `subprocess` because the project might be updated during execution.
+
+## Example 4: With Initiator Directory
+
+```bash
+$ python git_pull_indep.py /path/to/repo --initiator /path/to/caller/dir
+```
+
+The script will:
+1. Perform all git operations
+2. Return to `/path/to/caller/dir` instead of the original working directory
+
+This is useful when:
+- The calling script is in a different repository
+- You want to ensure the script returns to a specific directory regardless of where it was called from
+
+## Example 5: All Options
 
 ```bash
 $ python git_pull_indep.py /path/to/repo \
     --checkout main \
     --cache_path /tmp/cache \
+    --initiator /path/to/caller \
     --log-level DEBUG
 ```
 
@@ -83,9 +100,12 @@ if status_file.exists():
 
 ## Calling from Another Python Script
 
+### Simple Approach (Using os.system)
+
 ```python
 import sys
-import subprocess
+import os
+from pathlib import Path
 
 # Get the current Python interpreter (works in venv)
 python_exe = sys.executable
@@ -96,15 +116,53 @@ script_path = "/path/to/git_pull_indep.py"
 # Repository to update
 repo_path = "/path/to/repo"
 
+# Current directory to return to
+initiator_dir = os.getcwd()
+
 # Execute the script
-result = subprocess.run(
-    [python_exe, script_path, repo_path, "--checkout", "main"],
-    capture_output=True,
-    text=True
+result = os.system(
+    f"{python_exe} {script_path} {repo_path} "
+    f"--checkout main --initiator {initiator_dir}"
 )
 
-if result.returncode == 0:
+if result == 0:
     print("Update successful!")
 else:
-    print(f"Update failed: {result.stderr}")
+    print("Update failed!")
+```
+
+### Advanced Approach (For scenarios where script might be updated)
+
+```python
+import sys
+import os
+
+# Get the current Python interpreter (works in venv)
+python_exe = sys.executable
+
+# Path to the git-pull-indep script (might be in the repo being updated)
+script_path = "/path/to/repo/submodule/git_pull_indep.py"
+
+# Repository to update (parent repo)
+repo_path = "/path/to/repo"
+
+# Cache path to avoid conflicts
+cache_path = "/tmp/git_pull_cache"
+
+# Current directory to return to
+initiator_dir = os.getcwd()
+
+# Execute with cache_path to prevent issues if script is part of repo being updated
+result = os.system(
+    f"{python_exe} {script_path} {repo_path} "
+    f"--cache_path {cache_path} --initiator {initiator_dir}"
+)
+
+if result == 0:
+    # Check status file for detailed info
+    status_file = Path(repo_path) / ".git_pull_indep_status"
+    if status_file.exists():
+        print(status_file.read_text())
+else:
+    print("Update failed!")
 ```

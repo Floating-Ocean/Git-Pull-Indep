@@ -14,7 +14,6 @@ import logging
 import os
 import shutil
 import sys
-import subprocess
 from pathlib import Path
 from datetime import datetime
 
@@ -28,10 +27,11 @@ except ImportError:
 class GitPullIndep:
     """Main class for git pull operations"""
     
-    def __init__(self, repo_path, checkout_branch=None, cache_path=None, log_level="INFO"):
+    def __init__(self, repo_path, checkout_branch=None, cache_path=None, initiator=None, log_level="INFO"):
         self.repo_path = Path(repo_path).resolve()
         self.checkout_branch = checkout_branch
         self.cache_path = Path(cache_path).resolve() if cache_path else None
+        self.initiator = Path(initiator).resolve() if initiator else None
         self.original_dir = Path.cwd()
         self.status_file = self.repo_path / ".git_pull_indep_status"
         self.log_file = self.repo_path / ".git_pull_indep.log"
@@ -199,35 +199,29 @@ class GitPullIndep:
                 cached_script = self._copy_to_cache()
                 
                 if cached_script:
-                    self.logger.info("Re-executing from cache location")
+                    self.logger.info("Re-executing from cache location using os.execl")
                     
-                    # Build command to re-execute from cache
-                    cmd = [
+                    # Build arguments for re-execution from cache
+                    args = [
                         sys.executable,
                         str(cached_script),
                         str(self.repo_path)
                     ]
                     
                     if self.checkout_branch:
-                        cmd.extend(['--checkout', self.checkout_branch])
+                        args.extend(['--checkout', self.checkout_branch])
+                    
+                    if self.initiator:
+                        args.extend(['--initiator', str(self.initiator)])
                     
                     # Set environment variable to prevent infinite loop
-                    env = os.environ.copy()
-                    env['GIT_PULL_INDEP_FROM_CACHE'] = '1'
+                    os.environ['GIT_PULL_INDEP_FROM_CACHE'] = '1'
                     
-                    # Execute from cache
-                    result = subprocess.run(cmd, env=env, capture_output=True, text=True)
-                    
-                    # Log output
-                    if result.stdout:
-                        self.logger.info(f"Cache execution output:\n{result.stdout}")
-                    if result.stderr:
-                        self.logger.error(f"Cache execution errors:\n{result.stderr}")
-                    
-                    if result.returncode != 0:
-                        raise Exception(f"Cache execution failed with code {result.returncode}")
-                    
-                    self.logger.info("Cache execution completed successfully")
+                    # Execute from cache using os.execl (replaces current process)
+                    # This is important because the project itself might be updated
+                    self.logger.info(f"Executing: {' '.join(args)}")
+                    os.execl(sys.executable, *args)
+                    # Code after os.execl will not be reached
                     return
             
             # Validate repository path
@@ -263,9 +257,10 @@ class GitPullIndep:
             raise
         
         finally:
-            # Always return to original directory
-            os.chdir(self.original_dir)
-            self.logger.info(f"Returned to original directory: {self.original_dir}")
+            # Return to initiator directory if provided, otherwise original directory
+            target_dir = self.initiator if self.initiator else self.original_dir
+            os.chdir(target_dir)
+            self.logger.info(f"Returned to directory: {target_dir}")
 
 
 def main():
@@ -278,6 +273,7 @@ Examples:
   %(prog)s /path/to/repo
   %(prog)s /path/to/repo --checkout main
   %(prog)s /path/to/repo --checkout feature-branch --cache_path /tmp/cache
+  %(prog)s /path/to/repo --initiator /path/to/caller/dir
         """
     )
     
@@ -298,6 +294,11 @@ Examples:
     )
     
     parser.add_argument(
+        '--initiator',
+        help='Path to the initiator directory to return to after execution'
+    )
+    
+    parser.add_argument(
         '--log-level',
         default='INFO',
         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
@@ -311,6 +312,7 @@ Examples:
             repo_path=args.repo_path,
             checkout_branch=args.checkout_branch,
             cache_path=args.cache_path,
+            initiator=args.initiator,
             log_level=args.log_level
         )
         git_pull.run()
