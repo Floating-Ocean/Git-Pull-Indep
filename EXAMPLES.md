@@ -22,12 +22,20 @@ Output:
 Status file (`.git_pull_indep_status`):
 ```
 Status: SUCCESS
-Timestamp: 2025-11-11T14:40:29.224474
+Timestamp: 2025-11-12T15:29:16.404624
 Repository Changed: Yes
 Message: All operations completed successfully
+
+Current Commit Information:
+Branch: master
+Commit Hash: 66e5dbf398e027e88fd642075c812be53ec539ab
+Short Hash: 66e5dbf
+Author: Test User <test@test.com>
+Date: 2025-11-12T15:29:06
+Message: Remote change
 ```
 
-The "Repository Changed" field indicates whether new commits were pulled.
+The "Repository Changed" field indicates whether new commits were pulled. The commit information shows details about the current HEAD after the pull operation.
 
 ## Example 2: With Branch Checkout
 
@@ -87,11 +95,42 @@ $ python git_pull_indep.py /path/to/repo \
     --log-level DEBUG
 ```
 
+## Example 6: Handling Uncommitted Changes
+
+When your repository has uncommitted changes, the script automatically stashes them before pulling and restores them after:
+
+```bash
+$ cd /path/to/repo
+$ echo "local change" > file.txt  # Make some uncommitted changes
+$ python git_pull_indep.py /path/to/repo
+```
+
+Output:
+```
+2025-11-12 15:29:16,358 - WARNING - Repository has uncommitted changes
+2025-11-12 15:29:16,362 - INFO - Repository has uncommitted changes, stashing them
+2025-11-12 15:29:16,374 - INFO - Changes stashed successfully
+2025-11-12 15:29:16,374 - INFO - Performing git pull
+2025-11-12 15:29:16,395 - INFO - Git pull completed successfully - Repository was updated
+2025-11-12 15:29:16,395 - INFO - Updating submodules
+2025-11-12 15:29:16,395 - INFO - No submodules found
+2025-11-12 15:29:16,395 - INFO - Restoring stashed changes
+2025-11-12 15:29:16,404 - INFO - Stashed changes restored successfully
+```
+
+The script:
+1. Detects uncommitted changes (both tracked and untracked files)
+2. Stashes them automatically with `git stash push -u`
+3. Performs the pull operation
+4. Restores the stashed changes with `git stash pop`
+5. If conflicts occur during restoration, logs a warning and leaves changes in stash for manual resolution
+
 ## Checking Status Programmatically
 
 ```python
 import sys
 from pathlib import Path
+import re
 
 repo_path = Path("/path/to/repo")
 status_file = repo_path / ".git_pull_indep_status"
@@ -107,6 +146,14 @@ if status_file.exists():
             # Application may need to reload or restart
         else:
             print("Repository was already up-to-date.")
+        
+        # Extract commit information
+        if "Commit Hash:" in content:
+            commit_hash_match = re.search(r"Commit Hash: ([a-f0-9]+)", content)
+            branch_match = re.search(r"Branch: (.+)", content)
+            if commit_hash_match and branch_match:
+                print(f"Current branch: {branch_match.group(1)}")
+                print(f"Current commit: {commit_hash_match.group(1)[:7]}")
         
         # Continue with your application
     else:

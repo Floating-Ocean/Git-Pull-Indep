@@ -7,11 +7,12 @@ A tool to perform git pull independently. This Python script can be called from 
 - Perform `git pull` on a specified repository
 - Update submodules recursively with `git submodule update --init --recursive`
 - Optional branch checkout before pulling (creates branch if it doesn't exist)
+- **Automatic stash handling**: Automatically stashes uncommitted changes before pull and restores them after
 - Cache path option to copy the project before execution (useful when used as a submodule)
 - Initiator option to execute a Python script after completion using `os.execl` (useful for restarting the calling script after update)
 - Uses `os.execl` for cache execution to replace the process (important when the project itself is being updated)
 - Uses `sys.executable` for Python execution (venv compatible)
-- Creates status marker file for success/failure tracking
+- Creates status marker file for success/failure tracking with detailed commit information
 - Comprehensive logging
 
 ## Installation
@@ -82,20 +83,59 @@ python git_pull_indep.py /path/to/repo --checkout main --cache_path /tmp/cache -
 
 After execution, the script creates two files in the repository:
 
-1. `.git_pull_indep_status`: Contains execution status (SUCCESS/FAILURE), timestamp, repository change indicator, and message
+1. `.git_pull_indep_status`: Contains execution status (SUCCESS/FAILURE), timestamp, repository change indicator, message, and detailed commit information
 2. `.git_pull_indep.log`: Complete execution log
 
 Example status file:
 ```
 Status: SUCCESS
-Timestamp: 2025-11-11T14:40:29.224474
+Timestamp: 2025-11-12T15:29:16.404624
 Repository Changed: Yes
 Message: All operations completed successfully
+
+Current Commit Information:
+Branch: master
+Commit Hash: 66e5dbf398e027e88fd642075c812be53ec539ab
+Short Hash: 66e5dbf
+Author: Test User <test@test.com>
+Date: 2025-11-12T15:29:06
+Message: Remote change
 ```
 
 The "Repository Changed" field indicates whether the git pull operation retrieved any new changes:
 - `Yes`: New commits were pulled from the remote
 - `No`: Repository was already up-to-date or no remote configured
+
+The "Current Commit Information" section provides details about the current HEAD commit after the pull operation, including:
+- Branch name
+- Full and short commit hash
+- Commit author and email
+- Commit date
+- Commit message
+
+## Handling Uncommitted Changes
+
+The script automatically handles uncommitted changes in the repository:
+
+1. **Before pull**: If the repository has uncommitted changes (tracked modifications or untracked files), they are automatically stashed using `git stash push -u -m "git_pull_indep automatic stash"`
+2. **After pull**: The stashed changes are automatically restored using `git stash pop`
+3. **Conflict handling**: If conflicts occur when restoring stashed changes, the script logs a warning and leaves the changes in the stash for manual resolution
+
+This ensures that:
+- Git pull operations won't fail due to uncommitted changes
+- Your local work is preserved and automatically restored
+- You can resolve conflicts manually if they occur during stash restoration
+
+Example log output with stash handling:
+```
+2025-11-12 15:29:16,358 - WARNING - Repository has uncommitted changes
+2025-11-12 15:29:16,362 - INFO - Repository has uncommitted changes, stashing them
+2025-11-12 15:29:16,374 - INFO - Changes stashed successfully
+2025-11-12 15:29:16,374 - INFO - Performing git pull
+2025-11-12 15:29:16,395 - INFO - Git pull completed successfully - Repository was updated
+2025-11-12 15:29:16,395 - INFO - Restoring stashed changes
+2025-11-12 15:29:16,404 - INFO - Stashed changes restored successfully
+```
 
 ## Use Case: As a Submodule
 
