@@ -86,54 +86,68 @@ After execution, the script creates two files in the repository:
 1. `.git_pull_indep_status`: Contains execution status (SUCCESS/FAILURE), timestamp, repository change indicator, message, and detailed commit information
 2. `.git_pull_indep.log`: Complete execution log
 
-Example status file:
+Example status file (SUCCESS):
 ```
 Status: SUCCESS
-Timestamp: 2025-11-12T16:02:13.080804
-Repository Changed: No
-Message: All operations completed successfully
+Timestamp: 2025-11-12T16:27:39.583792
+Repository Changed: Yes (with stashes)
+Submodule Updates: mysub, othersub
 
 Current Commit:
-Hash: e117850
-Title: Add main file and submodule
-
-Submodules Updated: Yes
-
-Stash Status: Changes were stashed and restored
+Hash: 18b7abc966f77f46520e6a91e76063fd8d86ac6f
+Title: Update from remote
+Branch: master
 ```
 
-The "Repository Changed" field indicates whether the git pull operation retrieved any new changes:
+Example status file (FAILURE):
+```
+Status: FAILURE
+Timestamp: 2025-11-12T16:26:52.943051
+
+Current Commit:
+Hash: d445278c8eb6a05b6bd8ef4121e8857b8118b945
+Title: Initial commit with README
+Branch: master
+```
+
+The "Repository Changed" field indicates the repository status after the pull operation:
+- `No`: Repository was already up-to-date
 - `Yes`: New commits were pulled from the remote
-- `No`: Repository was already up-to-date or no remote configured
+- `Yes (with stashes)`: New commits were pulled and uncommitted changes were stashed
 
-The "Current Commit" section provides the commit hash and title (first line of commit message) of the current HEAD after the pull operation.
+The "Submodule Updates" field shows:
+- `None`: No submodules in repository or no submodules were updated
+- `module1, module2`: Comma-separated list of updated submodule names
 
-The "Submodules Updated" field appears when submodules are present and have been updated.
-
-The "Stash Status" field appears when uncommitted changes were automatically stashed and restored during the pull operation.
+The "Current Commit" section provides the full commit hash, title (first line of commit message), and branch name of the current HEAD after the pull operation.
 
 ## Handling Uncommitted Changes
 
 The script automatically handles uncommitted changes in the repository:
 
 1. **Before pull**: If the repository has uncommitted changes (tracked modifications or untracked files), they are automatically stashed using `git stash push -u -m "git_pull_indep automatic stash"`
-2. **After pull**: The stashed changes are automatically restored using `git stash pop`
-3. **Conflict handling**: If conflicts occur when restoring stashed changes, the script logs a warning and leaves the changes in the stash for manual resolution
+2. **Stashed changes are preserved**: The script does NOT automatically restore stashed changes to avoid potential conflicts. Use `git stash pop` manually to restore them after reviewing the pulled changes.
+3. **Conflict handling**: If conflicts occur during restoration, the script logs a warning and leaves the changes in the stash for manual resolution
 
 This ensures that:
 - Git pull operations won't fail due to uncommitted changes
-- Your local work is preserved and automatically restored
-- You can resolve conflicts manually if they occur during stash restoration
+- Your local work is preserved in the stash
+- You can manually restore changes when appropriate to avoid conflicts
 
 Example log output with stash handling:
 ```
-2025-11-12 15:29:16,358 - WARNING - Repository has uncommitted changes
-2025-11-12 15:29:16,362 - INFO - Repository has uncommitted changes, stashing them
-2025-11-12 15:29:16,374 - INFO - Changes stashed successfully
-2025-11-12 15:29:16,374 - INFO - Performing git pull
-2025-11-12 15:29:16,395 - INFO - Git pull completed successfully - Repository was updated
-2025-11-12 15:29:16,395 - INFO - Restoring stashed changes
-2025-11-12 15:29:16,404 - INFO - Stashed changes restored successfully
+2025-11-12 16:27:39,544 - WARNING - Repository has uncommitted changes
+2025-11-12 16:27:39,550 - INFO - Repository has uncommitted changes, stashing them
+2025-11-12 16:27:39,562 - INFO - Changes stashed successfully
+2025-11-12 16:27:39,562 - INFO - Performing git pull
+2025-11-12 16:27:39,583 - INFO - Git pull completed successfully - Repository was updated
+2025-11-12 16:27:39,583 - INFO - Updating submodules
+2025-11-12 16:27:39,583 - INFO - No submodules found
+```
+
+To restore your stashed changes after the pull, use:
+```bash
+git stash pop
 ```
 
 ## Use Case: As a Submodule
