@@ -22,20 +22,18 @@ Output:
 Status file (`.git_pull_indep_status`):
 ```
 Status: SUCCESS
-Timestamp: 2025-11-12T15:29:16.404624
+Timestamp: 2025-11-12T16:02:13.080804
 Repository Changed: Yes
 Message: All operations completed successfully
 
-Current Commit Information:
-Branch: master
-Commit Hash: 66e5dbf398e027e88fd642075c812be53ec539ab
-Short Hash: 66e5dbf
-Author: Test User <test@test.com>
-Date: 2025-11-12T15:29:06
-Message: Remote change
+Current Commit:
+Hash: e117850
+Title: Add main file and submodule
+
+Submodules Updated: Yes
 ```
 
-The "Repository Changed" field indicates whether new commits were pulled. The commit information shows details about the current HEAD after the pull operation.
+The "Repository Changed" field indicates whether new commits were pulled. The commit information shows the hash and title of the current HEAD after the pull operation. Additional fields like "Submodules Updated" and "Stash Status" appear when applicable.
 
 ## Example 2: With Branch Checkout
 
@@ -148,12 +146,20 @@ if status_file.exists():
             print("Repository was already up-to-date.")
         
         # Extract commit information
-        if "Commit Hash:" in content:
-            commit_hash_match = re.search(r"Commit Hash: ([a-f0-9]+)", content)
-            branch_match = re.search(r"Branch: (.+)", content)
-            if commit_hash_match and branch_match:
-                print(f"Current branch: {branch_match.group(1)}")
-                print(f"Current commit: {commit_hash_match.group(1)[:7]}")
+        if "Hash:" in content:
+            hash_match = re.search(r"Hash: ([a-f0-9]+)", content)
+            title_match = re.search(r"Title: (.+)", content)
+            if hash_match and title_match:
+                print(f"Current commit: {hash_match.group(1)}")
+                print(f"Commit title: {title_match.group(1)}")
+        
+        # Check for submodule updates
+        if "Submodules Updated: Yes" in content:
+            print("Submodules were updated")
+        
+        # Check for stash status
+        if "Stash Status:" in content:
+            print("Uncommitted changes were stashed and restored")
         
         # Continue with your application
     else:

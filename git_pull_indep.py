@@ -37,6 +37,7 @@ class GitPullIndep:
         self.log_file = self.repo_path / ".git_pull_indep.log"
         self.repo_changed = False  # Track if repo had changes
         self.stashed = False  # Track if we stashed changes
+        self.submodules_updated = False  # Track if submodules were updated
         
         # Setup logging
         self._setup_logging(log_level)
@@ -68,19 +69,25 @@ class GitPullIndep:
             f.write(f"Repository Changed: {changed}\n")
             f.write(f"Message: {message}\n")
             
-            # Add commit information if repo is available
+            # Add commit information if repo is available (only hash and message)
             if repo:
                 try:
                     current_commit = repo.head.commit
-                    f.write(f"\nCurrent Commit Information:\n")
-                    f.write(f"Branch: {repo.active_branch.name}\n")
-                    f.write(f"Commit Hash: {current_commit.hexsha}\n")
-                    f.write(f"Short Hash: {current_commit.hexsha[:7]}\n")
-                    f.write(f"Author: {current_commit.author.name} <{current_commit.author.email}>\n")
-                    f.write(f"Date: {datetime.fromtimestamp(current_commit.committed_date).isoformat()}\n")
-                    f.write(f"Message: {current_commit.message.strip()}\n")
+                    f.write(f"\nCurrent Commit:\n")
+                    f.write(f"Hash: {current_commit.hexsha[:7]}\n")
+                    # Get first line of commit message as title
+                    commit_title = current_commit.message.strip().split('\n')[0]
+                    f.write(f"Title: {commit_title}\n")
                 except Exception as e:
                     self.logger.warning(f"Could not retrieve commit information: {e}")
+            
+            # Add submodule update status
+            if self.submodules_updated:
+                f.write(f"\nSubmodules Updated: Yes\n")
+            
+            # Add stash status
+            if self.stashed:
+                f.write(f"\nStash Status: Changes were stashed and restored\n")
         
         self.logger.info(f"Status written: {status} - Changed: {changed} - {message}")
         
@@ -238,6 +245,7 @@ class GitPullIndep:
                     self.logger.info(f"Updating submodule: {submodule.name}")
                 
                 repo.git.submodule('update', '--init', '--recursive')
+                self.submodules_updated = True
                 self.logger.info("Submodules updated successfully")
             else:
                 self.logger.info("No submodules found")

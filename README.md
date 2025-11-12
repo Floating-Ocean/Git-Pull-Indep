@@ -89,29 +89,28 @@ After execution, the script creates two files in the repository:
 Example status file:
 ```
 Status: SUCCESS
-Timestamp: 2025-11-12T15:29:16.404624
-Repository Changed: Yes
+Timestamp: 2025-11-12T16:02:13.080804
+Repository Changed: No
 Message: All operations completed successfully
 
-Current Commit Information:
-Branch: master
-Commit Hash: 66e5dbf398e027e88fd642075c812be53ec539ab
-Short Hash: 66e5dbf
-Author: Test User <test@test.com>
-Date: 2025-11-12T15:29:06
-Message: Remote change
+Current Commit:
+Hash: e117850
+Title: Add main file and submodule
+
+Submodules Updated: Yes
+
+Stash Status: Changes were stashed and restored
 ```
 
 The "Repository Changed" field indicates whether the git pull operation retrieved any new changes:
 - `Yes`: New commits were pulled from the remote
 - `No`: Repository was already up-to-date or no remote configured
 
-The "Current Commit Information" section provides details about the current HEAD commit after the pull operation, including:
-- Branch name
-- Full and short commit hash
-- Commit author and email
-- Commit date
-- Commit message
+The "Current Commit" section provides the commit hash and title (first line of commit message) of the current HEAD after the pull operation.
+
+The "Submodules Updated" field appears when submodules are present and have been updated.
+
+The "Stash Status" field appears when uncommitted changes were automatically stashed and restored during the pull operation.
 
 ## Handling Uncommitted Changes
 
