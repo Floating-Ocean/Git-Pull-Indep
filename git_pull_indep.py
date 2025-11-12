@@ -36,6 +36,7 @@ class GitPullIndep:
         self.status_file = self.repo_path / ".git_pull_indep_status"
         self.log_file = self.repo_path / ".git_pull_indep.log"
         self.repo_changed = False  # Track if repo had changes
+        self.stashed = False  # Track if we stashed changes
         
         # Setup logging
         self._setup_logging(log_level)
@@ -55,7 +56,7 @@ class GitPullIndep:
         )
         self.logger = logging.getLogger(__name__)
         
-    def _write_status(self, success, message=""):
+    def _write_status(self, success, message="", repo=None):
         """Write status to status file"""
         status = "SUCCESS" if success else "FAILURE"
         timestamp = datetime.now().isoformat()
@@ -66,6 +67,20 @@ class GitPullIndep:
             f.write(f"Timestamp: {timestamp}\n")
             f.write(f"Repository Changed: {changed}\n")
             f.write(f"Message: {message}\n")
+            
+            # Add commit information if repo is available
+            if repo:
+                try:
+                    current_commit = repo.head.commit
+                    f.write(f"\nCurrent Commit Information:\n")
+                    f.write(f"Branch: {repo.active_branch.name}\n")
+                    f.write(f"Commit Hash: {current_commit.hexsha}\n")
+                    f.write(f"Short Hash: {current_commit.hexsha[:7]}\n")
+                    f.write(f"Author: {current_commit.author.name} <{current_commit.author.email}>\n")
+                    f.write(f"Date: {datetime.fromtimestamp(current_commit.committed_date).isoformat()}\n")
+                    f.write(f"Message: {current_commit.message.strip()}\n")
+                except Exception as e:
+                    self.logger.warning(f"Could not retrieve commit information: {e}")
         
         self.logger.info(f"Status written: {status} - Changed: {changed} - {message}")
         
@@ -147,6 +162,41 @@ class GitPullIndep:
         except Exception as e:
             self.logger.error(f"Failed to checkout branch: {e}")
             raise
+    
+    def _stash_changes(self, repo):
+        """Stash uncommitted changes if repository is dirty"""
+        try:
+            if repo.is_dirty(untracked_files=True):
+                self.logger.info("Repository has uncommitted changes, stashing them")
+                repo.git.stash('push', '-u', '-m', 'git_pull_indep automatic stash')
+                self.stashed = True
+                self.logger.info("Changes stashed successfully")
+            else:
+                self.logger.info("Repository is clean, no need to stash")
+        except Exception as e:
+            self.logger.error(f"Failed to stash changes: {e}")
+            raise
+    
+    def _unstash_changes(self, repo):
+        """Restore stashed changes if we stashed them"""
+        if not self.stashed:
+            return
+        
+        try:
+            self.logger.info("Restoring stashed changes")
+            repo.git.stash('pop')
+            self.logger.info("Stashed changes restored successfully")
+        except git.exc.GitCommandError as e:
+            # Handle merge conflicts or other pop errors
+            if 'CONFLICT' in str(e) or 'conflict' in str(e).lower():
+                self.logger.warning("Conflicts detected when restoring stashed changes")
+                self.logger.warning("Stashed changes are still in the stash. Use 'git stash pop' manually to resolve conflicts.")
+            else:
+                self.logger.error(f"Failed to restore stashed changes: {e}")
+                self.logger.warning("Stashed changes are still in the stash. Use 'git stash pop' to restore them manually.")
+        except Exception as e:
+            self.logger.error(f"Unexpected error when restoring stashed changes: {e}")
+            self.logger.warning("Stashed changes are still in the stash. Use 'git stash pop' to restore them manually.")
     
     def _git_pull(self, repo):
         """Perform git pull operation"""
@@ -245,17 +295,21 @@ class GitPullIndep:
             self.logger.info("Opening repository")
             repo = git.Repo(self.repo_path)
             
-            # Check for uncommitted changes
-            if repo.is_dirty():
+            # Check for uncommitted changes and stash if needed
+            if repo.is_dirty(untracked_files=True):
                 self.logger.warning("Repository has uncommitted changes")
+                self._stash_changes(repo)
             
             # Perform operations
             self._checkout_branch(repo)
             self._git_pull(repo)
             self._update_submodules(repo)
             
-            # Write success status
-            self._write_status(True, "All operations completed successfully")
+            # Restore stashed changes if we stashed them
+            self._unstash_changes(repo)
+            
+            # Write success status with commit information
+            self._write_status(True, "All operations completed successfully", repo)
             
             if self.repo_changed:
                 self.logger.info("All operations completed successfully - Repository was updated with new changes")
