@@ -98,9 +98,8 @@ Repository Changed: Yes (with stashes)
 Submodule Updates: mysub, othersub
 
 Current Commit:
-Hash: 18b7abc966f77f46520e6a91e76063fd8d86ac6f
-Title: Update from remote
-Branch: master
+18b7abc966f77f46520e6a91e76063fd8d86ac6f (master)
+Update from remote
 ```
 
 Example status file (FAILURE):
@@ -109,9 +108,8 @@ Status: FAILURE
 Timestamp: 2025-11-12T16:26:52.943051
 
 Current Commit:
-Hash: d445278c8eb6a05b6bd8ef4121e8857b8118b945
-Title: Initial commit with README
-Branch: master
+d445278c8eb6a05b6bd8ef4121e8857b8118b945 (master)
+Initial commit with README
 ```
 
 The "Repository Changed" field indicates the repository status after the pull operation:
@@ -121,9 +119,9 @@ The "Repository Changed" field indicates the repository status after the pull op
 
 The "Submodule Updates" field shows:
 - `None`: No submodules in repository or no submodules were updated
-- `module1, module2`: Comma-separated list of updated submodule names
+- `module1, module2`: Comma-separated list of submodule names that were actually updated
 
-The "Current Commit" section provides the full commit hash, title (first line of commit message), and branch name of the current HEAD after the pull operation.
+The "Current Commit" section provides the full commit hash and branch name on the first line, followed by the commit title (first line of commit message) on the second line.
 
 ## Handling Uncommitted Changes
 

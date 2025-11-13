@@ -27,15 +27,14 @@ Repository Changed: Yes (with stashes)
 Submodule Updates: mysub, othersub
 
 Current Commit:
-Hash: 18b7abc966f77f46520e6a91e76063fd8d86ac6f
-Title: Update from remote
-Branch: master
+18b7abc966f77f46520e6a91e76063fd8d86ac6f (master)
+Update from remote
 ```
 
 The status file shows:
 - Repository Changed: "No", "Yes", or "Yes (with stashes)"
-- Submodule Updates: "None" or comma-separated list of updated submodules
-- Current Commit: Full hash, title, and branch name
+- Submodule Updates: "None" or comma-separated list of submodules that were actually updated
+- Current Commit: Full hash and branch name on the first line, commit title on the second line
 
 ## Example 2: With Branch Checkout
 
@@ -153,15 +152,15 @@ if status_file.exists():
             print("Repository was already up-to-date.")
         
         # Extract commit information
-        if "Hash:" in content:
-            hash_match = re.search(r"Hash: ([a-f0-9]+)", content)
-            title_match = re.search(r"Title: (.+)", content)
-            branch_match = re.search(r"Branch: (.+)", content)
-            if hash_match and title_match:
-                print(f"Current commit: {hash_match.group(1)[:7]}")
-                print(f"Commit title: {title_match.group(1)}")
-                if branch_match:
-                    print(f"Branch: {branch_match.group(1)}")
+        # New format: hash (branch) on first line, title on second line
+        commit_match = re.search(r"Current Commit:\n([a-f0-9]+) \((.+?)\)\n(.+)", content)
+        if commit_match:
+            commit_hash = commit_match.group(1)
+            branch_name = commit_match.group(2)
+            commit_title = commit_match.group(3)
+            print(f"Current commit: {commit_hash[:7]}")
+            print(f"Branch: {branch_name}")
+            print(f"Commit title: {commit_title}")
         
         # Check for submodule updates
         submodule_match = re.search(r"Submodule Updates: (.+)", content)
