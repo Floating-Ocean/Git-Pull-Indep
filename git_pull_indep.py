@@ -36,6 +36,8 @@ class GitPullIndep:
         self.status_file = self.repo_path / ".git_pull_indep_status"
         self.log_file = self.repo_path / ".git_pull_indep.log"
         self.repo_changed = False  # Track if repo had changes
+        self.stashed = False  # Track if we stashed changes
+        self.updated_submodules = []  # Track list of updated submodules
         
         # Setup logging
         self._setup_logging(log_level)
@@ -55,19 +57,53 @@ class GitPullIndep:
         )
         self.logger = logging.getLogger(__name__)
         
-    def _write_status(self, success, message=""):
+    def _write_status(self, success, message="", repo=None):
         """Write status to status file"""
         status = "SUCCESS" if success else "FAILURE"
         timestamp = datetime.now().isoformat()
-        changed = "Yes" if self.repo_changed else "No"
         
         with open(self.status_file, 'w') as f:
             f.write(f"Status: {status}\n")
             f.write(f"Timestamp: {timestamp}\n")
-            f.write(f"Repository Changed: {changed}\n")
-            f.write(f"Message: {message}\n")
+            
+            # For SUCCESS status, add Repository Changed and Submodule Updates
+            if success:
+                # Determine Repository Changed status
+                if self.stashed:
+                    repo_status = "Yes (with stashes)"
+                elif self.repo_changed:
+                    repo_status = "Yes"
+                else:
+                    repo_status = "No"
+                f.write(f"Repository Changed: {repo_status}\n")
+                
+                # Add submodule updates
+                if self.updated_submodules:
+                    submodule_list = ", ".join(self.updated_submodules)
+                    f.write(f"Submodule Updates: {submodule_list}\n")
+                else:
+                    f.write(f"Submodule Updates: None\n")
+            
+            # Add commit information if repo is available
+            if repo:
+                try:
+                    current_commit = repo.head.commit
+                    f.write(f"\nCurrent Commit:\n")
+                    f.write(f"Hash: {current_commit.hexsha}\n")
+                    # Get first line of commit message as title
+                    commit_title = current_commit.message.strip().split('\n')[0]
+                    f.write(f"Title: {commit_title}\n")
+                    # Add branch name
+                    try:
+                        branch_name = repo.active_branch.name
+                        f.write(f"Branch: {branch_name}\n")
+                    except:
+                        # Handle detached HEAD state
+                        f.write(f"Branch: (detached)\n")
+                except Exception as e:
+                    self.logger.warning(f"Could not retrieve commit information: {e}")
         
-        self.logger.info(f"Status written: {status} - Changed: {changed} - {message}")
+        self.logger.info(f"Status written: {status}")
         
     def _copy_to_cache(self):
         """Copy the project to cache path and return the new script path"""
@@ -148,6 +184,20 @@ class GitPullIndep:
             self.logger.error(f"Failed to checkout branch: {e}")
             raise
     
+    def _stash_changes(self, repo):
+        """Stash uncommitted changes if repository is dirty"""
+        try:
+            if repo.is_dirty(untracked_files=True):
+                self.logger.info("Repository has uncommitted changes, stashing them")
+                repo.git.stash('push', '-u', '-m', 'git_pull_indep automatic stash')
+                self.stashed = True
+                self.logger.info("Changes stashed successfully")
+            else:
+                self.logger.info("Repository is clean, no need to stash")
+        except Exception as e:
+            self.logger.error(f"Failed to stash changes: {e}")
+            raise
+    
     def _git_pull(self, repo):
         """Perform git pull operation"""
         try:
@@ -186,6 +236,7 @@ class GitPullIndep:
             if repo.submodules:
                 for submodule in repo.submodules:
                     self.logger.info(f"Updating submodule: {submodule.name}")
+                    self.updated_submodules.append(submodule.name)
                 
                 repo.git.submodule('update', '--init', '--recursive')
                 self.logger.info("Submodules updated successfully")
@@ -245,17 +296,18 @@ class GitPullIndep:
             self.logger.info("Opening repository")
             repo = git.Repo(self.repo_path)
             
-            # Check for uncommitted changes
-            if repo.is_dirty():
+            # Check for uncommitted changes and stash if needed
+            if repo.is_dirty(untracked_files=True):
                 self.logger.warning("Repository has uncommitted changes")
+                self._stash_changes(repo)
             
             # Perform operations
             self._checkout_branch(repo)
             self._git_pull(repo)
             self._update_submodules(repo)
             
-            # Write success status
-            self._write_status(True, "All operations completed successfully")
+            # Write success status with commit information
+            self._write_status(True, "All operations completed successfully", repo)
             
             if self.repo_changed:
                 self.logger.info("All operations completed successfully - Repository was updated with new changes")
@@ -273,7 +325,12 @@ class GitPullIndep:
         except Exception as e:
             error_msg = f"Error: {str(e)}"
             self.logger.error(error_msg)
-            self._write_status(False, error_msg)
+            # Try to get repo for failure status, but handle if it doesn't exist
+            try:
+                repo = git.Repo(self.repo_path) if self.repo_path.exists() and (self.repo_path / ".git").exists() else None
+            except:
+                repo = None
+            self._write_status(False, "", repo)
             raise
         
         finally:

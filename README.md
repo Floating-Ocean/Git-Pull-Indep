@@ -7,11 +7,12 @@ A tool to perform git pull independently. This Python script can be called from 
 - Perform `git pull` on a specified repository
 - Update submodules recursively with `git submodule update --init --recursive`
 - Optional branch checkout before pulling (creates branch if it doesn't exist)
+- **Automatic stash handling**: Automatically stashes uncommitted changes before pull and restores them after
 - Cache path option to copy the project before execution (useful when used as a submodule)
 - Initiator option to execute a Python script after completion using `os.execl` (useful for restarting the calling script after update)
 - Uses `os.execl` for cache execution to replace the process (important when the project itself is being updated)
 - Uses `sys.executable` for Python execution (venv compatible)
-- Creates status marker file for success/failure tracking
+- Creates status marker file for success/failure tracking with detailed commit information
 - Comprehensive logging
 
 ## Installation
@@ -82,20 +83,72 @@ python git_pull_indep.py /path/to/repo --checkout main --cache_path /tmp/cache -
 
 After execution, the script creates two files in the repository:
 
-1. `.git_pull_indep_status`: Contains execution status (SUCCESS/FAILURE), timestamp, repository change indicator, and message
+1. `.git_pull_indep_status`: Contains execution status (SUCCESS/FAILURE), timestamp, repository change indicator, message, and detailed commit information
 2. `.git_pull_indep.log`: Complete execution log
 
-Example status file:
+Example status file (SUCCESS):
 ```
 Status: SUCCESS
-Timestamp: 2025-11-11T14:40:29.224474
-Repository Changed: Yes
-Message: All operations completed successfully
+Timestamp: 2025-11-12T16:27:39.583792
+Repository Changed: Yes (with stashes)
+Submodule Updates: mysub, othersub
+
+Current Commit:
+Hash: 18b7abc966f77f46520e6a91e76063fd8d86ac6f
+Title: Update from remote
+Branch: master
 ```
 
-The "Repository Changed" field indicates whether the git pull operation retrieved any new changes:
+Example status file (FAILURE):
+```
+Status: FAILURE
+Timestamp: 2025-11-12T16:26:52.943051
+
+Current Commit:
+Hash: d445278c8eb6a05b6bd8ef4121e8857b8118b945
+Title: Initial commit with README
+Branch: master
+```
+
+The "Repository Changed" field indicates the repository status after the pull operation:
+- `No`: Repository was already up-to-date
 - `Yes`: New commits were pulled from the remote
-- `No`: Repository was already up-to-date or no remote configured
+- `Yes (with stashes)`: New commits were pulled and uncommitted changes were stashed
+
+The "Submodule Updates" field shows:
+- `None`: No submodules in repository or no submodules were updated
+- `module1, module2`: Comma-separated list of updated submodule names
+
+The "Current Commit" section provides the full commit hash, title (first line of commit message), and branch name of the current HEAD after the pull operation.
+
+## Handling Uncommitted Changes
+
+The script automatically handles uncommitted changes in the repository:
+
+1. **Before pull**: If the repository has uncommitted changes (tracked modifications or untracked files), they are automatically stashed using `git stash push -u -m "git_pull_indep automatic stash"`
+2. **Stashed changes are preserved**: The script does NOT automatically restore stashed changes to avoid potential conflicts. Use `git stash pop` manually to restore them after reviewing the pulled changes.
+3. **Conflict handling**: If conflicts occur during restoration, the script logs a warning and leaves the changes in the stash for manual resolution
+
+This ensures that:
+- Git pull operations won't fail due to uncommitted changes
+- Your local work is preserved in the stash
+- You can manually restore changes when appropriate to avoid conflicts
+
+Example log output with stash handling:
+```
+2025-11-12 16:27:39,544 - WARNING - Repository has uncommitted changes
+2025-11-12 16:27:39,550 - INFO - Repository has uncommitted changes, stashing them
+2025-11-12 16:27:39,562 - INFO - Changes stashed successfully
+2025-11-12 16:27:39,562 - INFO - Performing git pull
+2025-11-12 16:27:39,583 - INFO - Git pull completed successfully - Repository was updated
+2025-11-12 16:27:39,583 - INFO - Updating submodules
+2025-11-12 16:27:39,583 - INFO - No submodules found
+```
+
+To restore your stashed changes after the pull, use:
+```bash
+git stash pop
+```
 
 ## Use Case: As a Submodule
 

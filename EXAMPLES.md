@@ -22,12 +22,20 @@ Output:
 Status file (`.git_pull_indep_status`):
 ```
 Status: SUCCESS
-Timestamp: 2025-11-11T14:40:29.224474
-Repository Changed: Yes
-Message: All operations completed successfully
+Timestamp: 2025-11-12T16:27:39.583792
+Repository Changed: Yes (with stashes)
+Submodule Updates: mysub, othersub
+
+Current Commit:
+Hash: 18b7abc966f77f46520e6a91e76063fd8d86ac6f
+Title: Update from remote
+Branch: master
 ```
 
-The "Repository Changed" field indicates whether new commits were pulled.
+The status file shows:
+- Repository Changed: "No", "Yes", or "Yes (with stashes)"
+- Submodule Updates: "None" or comma-separated list of updated submodules
+- Current Commit: Full hash, title, and branch name
 
 ## Example 2: With Branch Checkout
 
@@ -87,11 +95,44 @@ $ python git_pull_indep.py /path/to/repo \
     --log-level DEBUG
 ```
 
+## Example 6: Handling Uncommitted Changes
+
+When your repository has uncommitted changes, the script automatically stashes them before pulling:
+
+```bash
+$ cd /path/to/repo
+$ echo "local change" > file.txt  # Make some uncommitted changes
+$ python git_pull_indep.py /path/to/repo
+```
+
+Output:
+```
+2025-11-12 16:27:39,544 - WARNING - Repository has uncommitted changes
+2025-11-12 16:27:39,550 - INFO - Repository has uncommitted changes, stashing them
+2025-11-12 16:27:39,562 - INFO - Changes stashed successfully
+2025-11-12 16:27:39,562 - INFO - Performing git pull
+2025-11-12 16:27:39,583 - INFO - Git pull completed successfully - Repository was updated
+2025-11-12 16:27:39,583 - INFO - Updating submodules
+2025-11-12 16:27:39,583 - INFO - No submodules found
+```
+
+The script:
+1. Detects uncommitted changes (both tracked and untracked files)
+2. Stashes them automatically with `git stash push -u`
+3. Performs the pull operation
+4. **Leaves changes in stash** - use `git stash pop` to restore them manually
+
+To restore your changes after reviewing the pulled updates:
+```bash
+$ git stash pop
+```
+
 ## Checking Status Programmatically
 
 ```python
 import sys
 from pathlib import Path
+import re
 
 repo_path = Path("/path/to/repo")
 status_file = repo_path / ".git_pull_indep_status"
@@ -102,11 +143,30 @@ if status_file.exists():
         print("Git pull succeeded!")
         
         # Check if repository had changes
-        if "Repository Changed: Yes" in content:
+        if "Repository Changed: Yes (with stashes)" in content:
+            print("Repository was updated with new changes and stashes were created!")
+            print("Use 'git stash pop' to restore your uncommitted changes")
+        elif "Repository Changed: Yes" in content:
             print("Repository was updated with new changes!")
             # Application may need to reload or restart
         else:
             print("Repository was already up-to-date.")
+        
+        # Extract commit information
+        if "Hash:" in content:
+            hash_match = re.search(r"Hash: ([a-f0-9]+)", content)
+            title_match = re.search(r"Title: (.+)", content)
+            branch_match = re.search(r"Branch: (.+)", content)
+            if hash_match and title_match:
+                print(f"Current commit: {hash_match.group(1)[:7]}")
+                print(f"Commit title: {title_match.group(1)}")
+                if branch_match:
+                    print(f"Branch: {branch_match.group(1)}")
+        
+        # Check for submodule updates
+        submodule_match = re.search(r"Submodule Updates: (.+)", content)
+        if submodule_match and submodule_match.group(1) != "None":
+            print(f"Submodules updated: {submodule_match.group(1)}")
         
         # Continue with your application
     else:
