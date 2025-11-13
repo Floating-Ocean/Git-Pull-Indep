@@ -77,7 +77,7 @@ class GitPullIndep:
                     repo_status = "No"
                 f.write(f"Repository Changed: {repo_status}\n")
                 
-                # Add submodule updates
+                # Add submodule updates - only include modules that were actually updated
                 if self.updated_submodules:
                     submodule_list = ", ".join(self.updated_submodules)
                     f.write(f"Submodule Updates: {submodule_list}\n")
@@ -88,18 +88,16 @@ class GitPullIndep:
             if repo:
                 try:
                     current_commit = repo.head.commit
-                    f.write(f"\nCurrent Commit:\n")
-                    f.write(f"Hash: {current_commit.hexsha}\n")
-                    # Get first line of commit message as title
                     commit_title = current_commit.message.strip().split('\n')[0]
-                    f.write(f"Title: {commit_title}\n")
-                    # Add branch name
+                    # Get branch name
                     try:
                         branch_name = repo.active_branch.name
-                        f.write(f"Branch: {branch_name}\n")
                     except:
                         # Handle detached HEAD state
-                        f.write(f"Branch: (detached)\n")
+                        branch_name = "(detached)"
+                    f.write(f"\nCurrent Commit:\n")
+                    f.write(f"{current_commit.hexsha} ({branch_name})\n")
+                    f.write(f"{commit_title}\n")
                 except Exception as e:
                     self.logger.warning(f"Could not retrieve commit information: {e}")
         
@@ -260,12 +258,45 @@ class GitPullIndep:
             
             # Initialize and update submodules recursively
             if repo.submodules:
+                # Track submodule commit SHAs before update
+                submodule_shas_before = {}
                 for submodule in repo.submodules:
-                    self.logger.info(f"Updating submodule: {submodule.name}")
-                    self.updated_submodules.append(submodule.name)
+                    try:
+                        # Get the current HEAD of the submodule directory (not what parent expects)
+                        submodule_repo = git.Repo(submodule.abspath)
+                        submodule_shas_before[submodule.name] = submodule_repo.head.commit.hexsha
+                    except Exception as e:
+                        self.logger.warning(f"Could not get SHA for submodule {submodule.name}: {e}")
+                        # If we can't get the SHA, assume it needs updating
+                        submodule_shas_before[submodule.name] = None
                 
+                # Perform the update
                 repo.git.submodule('update', '--init', '--recursive')
-                self.logger.info("Submodules updated successfully")
+                
+                # Check which submodules were actually updated
+                for submodule in repo.submodules:
+                    try:
+                        # Refresh the submodule to get current state
+                        submodule_repo = git.Repo(submodule.abspath)
+                        current_sha = submodule_repo.head.commit.hexsha
+                        old_sha = submodule_shas_before.get(submodule.name)
+                        
+                        # Only add to updated list if SHA changed
+                        if old_sha != current_sha:
+                            self.logger.info(f"Submodule {submodule.name} was updated: {old_sha[:7] if old_sha else 'N/A'} -> {current_sha[:7]}")
+                            self.updated_submodules.append(submodule.name)
+                        else:
+                            self.logger.info(f"Submodule {submodule.name} is already up-to-date")
+                    except Exception as e:
+                        self.logger.warning(f"Could not check update status for submodule {submodule.name}: {e}")
+                        # If we can't verify, assume it was updated to be safe
+                        if submodule.name not in self.updated_submodules:
+                            self.updated_submodules.append(submodule.name)
+                
+                if self.updated_submodules:
+                    self.logger.info(f"Submodules updated successfully: {', '.join(self.updated_submodules)}")
+                else:
+                    self.logger.info("Submodules checked - all already up-to-date")
             else:
                 self.logger.info("No submodules found")
                 
