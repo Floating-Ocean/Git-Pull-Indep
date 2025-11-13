@@ -189,14 +189,40 @@ class GitPullIndep:
         try:
             if repo.is_dirty(untracked_files=True):
                 self.logger.info("Repository has uncommitted changes, stashing them")
-                repo.git.stash('push', '-u', '-m', 'git_pull_indep automatic stash')
-                self.stashed = True
-                self.logger.info("Changes stashed successfully")
+                try:
+                    repo.git.stash('push', '-u', '-m', 'git_pull_indep automatic stash')
+                    self.stashed = True
+                    self.logger.info("Changes stashed successfully")
+                except git.exc.GitCommandError as e:
+                    self.logger.error(f"Failed to stash changes (git command error): {e}")
+                    self.logger.warning("Continuing without stashing - pull may fail if there are conflicts")
+                except Exception as e:
+                    self.logger.error(f"Failed to stash changes (unexpected error): {e}")
+                    self.logger.warning("Continuing without stashing - pull may fail if there are conflicts")
             else:
                 self.logger.info("Repository is clean, no need to stash")
         except Exception as e:
-            self.logger.error(f"Failed to stash changes: {e}")
+            self.logger.error(f"Failed to check repository status: {e}")
             raise
+    
+    def _pop_stash(self, repo):
+        """Pop stashed changes back to working directory"""
+        try:
+            self.logger.info("Attempting to pop stashed changes")
+            try:
+                repo.git.stash('pop')
+                self.stashed = False  # Reset stashed flag since we've restored the changes
+                self.logger.info("Stashed changes restored successfully")
+            except git.exc.GitCommandError as e:
+                self.logger.error(f"Failed to pop stash (git command error): {e}")
+                self.logger.warning("Stashed changes remain in stash - you may need to manually resolve with 'git stash pop'")
+            except Exception as e:
+                self.logger.error(f"Failed to pop stash (unexpected error): {e}")
+                self.logger.warning("Stashed changes remain in stash - you may need to manually resolve with 'git stash pop'")
+        except Exception as e:
+            self.logger.error(f"Unexpected error in pop stash operation: {e}")
+            # Don't raise - we want to continue even if pop fails
+
     
     def _git_pull(self, repo):
         """Perform git pull operation"""
@@ -305,6 +331,11 @@ class GitPullIndep:
             self._checkout_branch(repo)
             self._git_pull(repo)
             self._update_submodules(repo)
+            
+            # If no changes were pulled and we stashed changes, pop them back
+            if not self.repo_changed and self.stashed:
+                self.logger.info("No remote changes were pulled, restoring stashed local changes")
+                self._pop_stash(repo)
             
             # Write success status with commit information
             self._write_status(True, "All operations completed successfully", repo)
