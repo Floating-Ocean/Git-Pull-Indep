@@ -130,26 +130,36 @@ The "Current Commit" section provides the full commit hash, title (first line of
 The script automatically handles uncommitted changes in the repository:
 
 1. **Before pull**: If the repository has uncommitted changes (tracked modifications or untracked files), they are automatically stashed using `git stash push -u -m "git_pull_indep automatic stash"`
-2. **Stashed changes are preserved**: The script does NOT automatically restore stashed changes to avoid potential conflicts. Use `git stash pop` manually to restore them after reviewing the pulled changes.
-3. **Conflict handling**: If conflicts occur during restoration, the script logs a warning and leaves the changes in the stash for manual resolution
+2. **Smart stash restoration**:
+   - **No remote changes**: If no changes are pulled from remote, the stash is automatically popped back to restore your local changes. Status will show "Repository Changed: No"
+   - **With remote changes**: If changes are pulled from remote, the stash is preserved to avoid potential conflicts. Status will show "Repository Changed: Yes (with stashes)"
+3. **Exception handling**: If stashing or popping fails (e.g., due to file locks or permission issues), the script logs an error and continues execution when safe to do so
+4. **Conflict handling**: If conflicts occur during stash pop, the script logs a warning and leaves the changes in the stash for manual resolution
 
 This ensures that:
 - Git pull operations won't fail due to uncommitted changes
-- Your local work is preserved in the stash
-- You can manually restore changes when appropriate to avoid conflicts
+- Your local work is preserved and automatically restored when safe
+- Potential conflicts with remote changes are avoided by keeping stash separate
+- File system errors during stash operations are handled gracefully
 
-Example log output with stash handling:
+Example log output with automatic stash restoration (no remote changes):
 ```
-2025-11-12 16:27:39,544 - WARNING - Repository has uncommitted changes
-2025-11-12 16:27:39,550 - INFO - Repository has uncommitted changes, stashing them
-2025-11-12 16:27:39,562 - INFO - Changes stashed successfully
-2025-11-12 16:27:39,562 - INFO - Performing git pull
-2025-11-12 16:27:39,583 - INFO - Git pull completed successfully - Repository was updated
-2025-11-12 16:27:39,583 - INFO - Updating submodules
-2025-11-12 16:27:39,583 - INFO - No submodules found
+2025-11-13 07:36:07,156 - INFO - Repository has uncommitted changes, stashing them
+2025-11-13 07:36:07,175 - INFO - Changes stashed successfully
+2025-11-13 07:36:07,175 - INFO - Performing git pull
+2025-11-13 07:36:07,175 - WARNING - No 'origin' remote configured, skipping git pull
+2025-11-13 07:36:07,177 - INFO - No remote changes were pulled, restoring stashed local changes
+2025-11-13 07:36:07,177 - INFO - Attempting to pop stashed changes
+2025-11-13 07:36:07,186 - INFO - Stashed changes restored successfully
 ```
 
-To restore your stashed changes after the pull, use:
+Example log output with stash preserved (remote changes detected):
+```
+2025-11-13 07:36:57,382 - INFO - Changes stashed successfully
+2025-11-13 07:36:57,403 - INFO - Git pull completed successfully - Repository was updated
+```
+
+When stash is preserved, restore your changes manually after reviewing remote changes:
 ```bash
 git stash pop
 ```
