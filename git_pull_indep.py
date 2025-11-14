@@ -62,7 +62,7 @@ class GitPullIndep:
         status = "SUCCESS" if success else "FAILURE"
         timestamp = datetime.now().isoformat()
         
-        with open(self.status_file, 'w') as f:
+        with open(self.status_file, 'w', encoding='utf-8') as f:
             f.write(f"Status: {status}\n")
             f.write(f"Timestamp: {timestamp}\n")
             
