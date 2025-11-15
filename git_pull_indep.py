@@ -355,7 +355,9 @@ class GitPullIndep:
                 if current_script == expected_cache_location:
                     self.logger.info(f"Verified: Running from cache location: {current_script}")
                 else:
-                    self.logger.warning(f"Cache location mismatch: expected {expected_cache_location}, running from {current_script}")
+                    error_msg = f"Cache location mismatch: expected {expected_cache_location}, running from {current_script}"
+                    self.logger.error(error_msg)
+                    raise ValueError(error_msg)
             
             # Validate repository path
             if not self.repo_path.exists():
