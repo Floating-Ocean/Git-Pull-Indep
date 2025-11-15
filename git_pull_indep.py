@@ -380,6 +380,11 @@ class GitPullIndep:
             # If initiator is provided, execute it using os.execl
             if self.initiator:
                 self.logger.info(f"Switching back to initiator: os.execl -> python {self.initiator}")
+                # Clean up the GIT_PULL_INDEP_FROM_CACHE environment variable
+                # This ensures the next invocation will properly copy to cache if needed
+                if 'GIT_PULL_INDEP_FROM_CACHE' in os.environ:
+                    del os.environ['GIT_PULL_INDEP_FROM_CACHE']
+                    self.logger.info("Cleaned up GIT_PULL_INDEP_FROM_CACHE environment variable")
                 # Use os.execl to replace current process with the initiator
                 os.execl(sys.executable, sys.executable, str(self.initiator))
                 # Code after os.execl will not be reached
