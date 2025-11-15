@@ -333,7 +333,8 @@ class GitPullIndep:
                         args.extend(['--initiator', str(self.initiator)])
                     
                     # Set environment variable to prevent infinite loop
-                    os.environ['GIT_PULL_INDEP_FROM_CACHE'] = '1'
+                    # Store the cache path for verification
+                    os.environ['GIT_PULL_INDEP_FROM_CACHE'] = str(self.cache_path)
                     
                     # Execute from cache using os.execl (replaces current process)
                     # This is important because the project itself might be updated
@@ -341,6 +342,22 @@ class GitPullIndep:
                     os.execl(sys.executable, *args)
                     # Code after os.execl will not be reached
                     return
+            elif 'GIT_PULL_INDEP_FROM_CACHE' in os.environ:
+                # Clean up the environment variable immediately after detecting it
+                # This prevents it from persisting if an exception occurs or user exits
+                cached_from = os.environ['GIT_PULL_INDEP_FROM_CACHE']
+                del os.environ['GIT_PULL_INDEP_FROM_CACHE']
+                self.logger.info(f"Cleaned up GIT_PULL_INDEP_FROM_CACHE environment variable (was: {cached_from})")
+                
+                # Verify we're running from the expected cache location
+                current_script = Path(__file__).parent.resolve()
+                expected_cache_location = Path(cached_from) / current_script.name
+                if current_script == expected_cache_location:
+                    self.logger.info(f"Verified: Running from cache location: {current_script}")
+                else:
+                    error_msg = f"Cache location mismatch: expected {expected_cache_location}, running from {current_script}"
+                    self.logger.error(error_msg)
+                    raise ValueError(error_msg)
             
             # Validate repository path
             if not self.repo_path.exists():
@@ -393,6 +410,16 @@ class GitPullIndep:
             except:
                 repo = None
             self._write_status(False, "", repo)
+            
+            # If initiator is provided, execute it even after exception
+            # This allows the initiator to handle the failure appropriately
+            if self.initiator:
+                self.logger.info(f"Exception occurred, but switching back to initiator: os.execl -> python {self.initiator}")
+                # Use os.execl to replace current process with the initiator
+                os.execl(sys.executable, sys.executable, str(self.initiator))
+                # Code after os.execl will not be reached
+            
+            # If no initiator, re-raise the exception
             raise
         
         finally:
