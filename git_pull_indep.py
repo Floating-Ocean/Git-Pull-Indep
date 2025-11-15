@@ -410,6 +410,16 @@ class GitPullIndep:
             except:
                 repo = None
             self._write_status(False, "", repo)
+            
+            # If initiator is provided, execute it even after exception
+            # This allows the initiator to handle the failure appropriately
+            if self.initiator:
+                self.logger.info(f"Exception occurred, but switching back to initiator: os.execl -> python {self.initiator}")
+                # Use os.execl to replace current process with the initiator
+                os.execl(sys.executable, sys.executable, str(self.initiator))
+                # Code after os.execl will not be reached
+            
+            # If no initiator, re-raise the exception
             raise
         
         finally:
