@@ -379,7 +379,7 @@ class GitPullIndep:
             
             # If initiator is provided, execute it using os.execl
             if self.initiator:
-                self.logger.info(f"Executing initiator: {self.initiator}")
+                self.logger.info(f"Switching back to initiator: os.execl -> python {self.initiator}")
                 # Use os.execl to replace current process with the initiator
                 os.execl(sys.executable, sys.executable, str(self.initiator))
                 # Code after os.execl will not be reached
