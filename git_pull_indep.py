@@ -333,7 +333,8 @@ class GitPullIndep:
                         args.extend(['--initiator', str(self.initiator)])
                     
                     # Set environment variable to prevent infinite loop
-                    os.environ['GIT_PULL_INDEP_FROM_CACHE'] = '1'
+                    # Store the cache path for verification
+                    os.environ['GIT_PULL_INDEP_FROM_CACHE'] = str(self.cache_path)
                     
                     # Execute from cache using os.execl (replaces current process)
                     # This is important because the project itself might be updated
@@ -344,8 +345,17 @@ class GitPullIndep:
             elif 'GIT_PULL_INDEP_FROM_CACHE' in os.environ:
                 # Clean up the environment variable immediately after detecting it
                 # This prevents it from persisting if an exception occurs or user exits
+                cached_from = os.environ['GIT_PULL_INDEP_FROM_CACHE']
                 del os.environ['GIT_PULL_INDEP_FROM_CACHE']
-                self.logger.info("Cleaned up GIT_PULL_INDEP_FROM_CACHE environment variable")
+                self.logger.info(f"Cleaned up GIT_PULL_INDEP_FROM_CACHE environment variable (was: {cached_from})")
+                
+                # Verify we're running from the expected cache location
+                current_script = Path(__file__).parent.resolve()
+                expected_cache_location = Path(cached_from) / current_script.name
+                if current_script == expected_cache_location:
+                    self.logger.info(f"Verified: Running from cache location: {current_script}")
+                else:
+                    self.logger.warning(f"Cache location mismatch: expected {expected_cache_location}, running from {current_script}")
             
             # Validate repository path
             if not self.repo_path.exists():
