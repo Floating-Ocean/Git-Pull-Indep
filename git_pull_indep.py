@@ -232,17 +232,24 @@ class GitPullIndep:
                 self.logger.warning("No 'origin' remote configured, skipping git pull")
                 return
             
+            # Get the current commit SHA before pull
+            commit_before = repo.head.commit.hexsha
+            self.logger.debug(f"Commit before pull: {commit_before}")
+            
             origin = repo.remote(name='origin')
             pull_info = origin.pull()
             
+            # Get the current commit SHA after pull
+            commit_after = repo.head.commit.hexsha
+            self.logger.debug(f"Commit after pull: {commit_after}")
+            
             for info in pull_info:
                 self.logger.info(f"Pulled: {info.ref} - {info.flags}")
-                # Check if HEAD_UPTODATE flag (4) is not set, meaning changes were pulled
-                # HEAD_UPTODATE = 4 means no changes
-                if info.flags != 4:
-                    self.repo_changed = True
             
-            if self.repo_changed:
+            # Determine if repository changed by comparing commits
+            # This is more reliable than checking flags, especially when git fetch was run before
+            if commit_before != commit_after:
+                self.repo_changed = True
                 self.logger.info("Git pull completed successfully - Repository was updated")
             else:
                 self.logger.info("Git pull completed successfully - Repository already up-to-date")
